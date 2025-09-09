@@ -67,20 +67,35 @@ app.post('/chat', async (req, res) => {
       context = relevantContent.join('\n\n');
     }
     
-    const prompt = context 
-      ? `Context: ${context}\n\nQuestion: ${message}\n\nAnswer based on the context above:`
-      : message;
+    let aiResponse;
+    let prefix;
     
-    // Call Ollama API
-    const ollamaResponse = await axios.post('http://localhost:11434/api/chat', {
-      model: 'llama3.2:latest',
-      messages: [{ role: 'user', content: prompt }],
-      stream: false
-    });
+    if (context && context.trim().length > 0) {
+      // Use trained content
+      const prompt = `Answer this question using ONLY the provided context. Context: ${context}\n\nQuestion: ${message}\n\nAnswer:`;
+      
+      const response = await axios.post('http://localhost:11434/api/chat', {
+        model: 'llama3.2:latest',
+        messages: [{ role: 'user', content: prompt }],
+        stream: false
+      });
+      
+      aiResponse = response.data.message?.content || 'No answer found in trained data.';
+      prefix = 'Trained: ';
+    } else {
+      // Use LLM general knowledge
+      const response = await axios.post('http://localhost:11434/api/chat', {
+        model: 'llama3.2:latest',
+        messages: [{ role: 'user', content: message }],
+        stream: false
+      });
+      
+      aiResponse = response.data.message?.content || 'Sorry, I could not generate a response.';
+      prefix = 'LLM: ';
+    }
     
-    const aiResponse = ollamaResponse.data.message?.content || 'Sorry, I could not generate a response.';
-    
-    // Simulate streaming by sending word by word
+    // Stream response with prefix
+    res.write(prefix);
     const words = aiResponse.split(' ');
     for (let i = 0; i < words.length; i++) {
       res.write(words[i] + (i < words.length - 1 ? ' ' : ''));
